@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Call Graph Explorer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+__STYLE__
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="card header">
+      <div>
+        <h1>Call Graph Explorer</h1>
+        <p>Interactive call graph with URL query filters and node focus mode.</p>
+      </div>
+      <div id="stats" class="chips"></div>
+    </header>
+
+    <section class="card controls">
+      <form id="filters" class="filters" autocomplete="off">
+        <label class="field"><span>Mode</span><select id="mode" name="mode"><option value="class">Class</option><option value="method">Method</option><option value="namespace">Namespace</option></select></label>
+        <label class="field"><span>Namespace depth</span><input id="namespaceDepth" name="namespaceDepth" type="number" min="1" step="1"><small class="hint">Used when mode=namespace.</small></label>
+        <label class="field"><span>Min edge weight</span><input id="minEdgeWeight" name="minEdgeWeight" type="number" min="1" step="1"><small class="hint">Hide weak links under this weight.</small></label>
+        <label class="field"><span>Max nodes</span><input id="maxNodes" name="maxNodes" type="number" min="1" step="1" placeholder="No limit"><small class="hint">Top nodes by weighted degree.</small></label>
+        <label class="field"><span>Namespaces</span><input id="namespaces" name="ns" list="namespaceHints" placeholder="App\\Service,App\\Domain"><datalist id="namespaceHints"></datalist><small class="hint">Comma-separated prefixes, matches either side.</small></label>
+        <label class="checkbox"><input id="includeFunctions" name="includeFunctions" value="1" type="checkbox">Include function nodes</label>
+        <label class="checkbox"><input id="strictNamespaces" name="strictNamespaces" value="1" type="checkbox">Exclude cross-namespace relations</label>
+      </form>
+      <div class="actions">
+        <button id="applyFilters" class="btn-primary" type="button">Apply filters (reload)</button>
+        <button id="resetFilters" class="btn-muted" type="button">Reset URL filters</button>
+      </div>
+      <div id="activeFilters" class="chips"></div>
+    </section>
+
+    <section class="layout">
+      <div class="card graph"><div id="graph"></div><div id="emptyState" class="empty"></div></div>
+      <aside class="card details">
+        <h2>Node focus</h2>
+        <p id="focusTarget">Click node to focus neighborhood.</p>
+        <button id="clearFocus" class="btn-muted" type="button">Clear focus</button>
+        <h3>Outgoing</h3><ul id="outgoing"></ul>
+        <h3>Incoming</h3><ul id="incoming"></ul>
+      </aside>
+    </section>
+  </div>
+
+  <script id="callgraph-payload" type="application/json">__PAYLOAD__</script>
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.31.2/dist/cytoscape.min.js"></script>
+  <script>
+__GRAPH_BUILDER__
+  </script>
+  <script>
+__APP_JS__
+  </script>
+</body>
+</html>

@@ -13,7 +13,8 @@
         }
     },
     "bin": [
-        "bin/callgraph-viz"
+        "bin/callgraph-viz",
+        "bin/callgraph-viz-html"
     ],
     "suggest": {
         "phpstan/extension-installer": "Automatically registers callgraph.neon in PHPStan"

@@ -1,0 +1,151 @@
+#!/usr/bin/env php
+<?php declare(strict_types=1);
+
+use CallGraph\Viz\CallGraphLoader;
+use CallGraph\Viz\HtmlRenderer;
+
+require $_composer_autoload_path ?? __DIR__ . '/../vendor/autoload.php';
+
+$options = getopt(
+    'hi:o:m:p:w:n:',
+    [
+        'help',
+        'input:',
+        'html:',
+        'mode:',
+        'namespace-depth:',
+        'min-edge-weight:',
+        'max-nodes:',
+        'include-functions',
+    ]
+);
+
+if (!is_array($options)) {
+    fwrite(STDERR, "Failed to parse CLI options." . PHP_EOL);
+    exit(2);
+}
+
+if (isset($options['h']) || isset($options['help'])) {
+    printHelp();
+    exit(0);
+}
+
+$input = optionValue($options, ['i', 'input'], 'callgraph.json');
+$htmlPath = optionValue($options, ['o', 'html'], 'callgraph.html');
+$mode = optionValue($options, ['m', 'mode'], 'class');
+$includeFunctions = isset($options['include-functions']);
+
+$namespaceDepthRaw = optionValue($options, ['p', 'namespace-depth'], '2');
+$minEdgeWeightRaw = optionValue($options, ['w', 'min-edge-weight'], '1');
+$maxNodesRaw = optionValue($options, ['n', 'max-nodes'], null);
+
+if ($mode === null || !in_array($mode, ['class', 'method', 'namespace'], true)) {
+    fwrite(STDERR, "--mode must be one of: class, method, namespace." . PHP_EOL);
+    exit(2);
+}
+
+if (!ctype_digit($namespaceDepthRaw) || (int) $namespaceDepthRaw < 1) {
+    fwrite(STDERR, "--namespace-depth must be a positive integer." . PHP_EOL);
+    exit(2);
+}
+
+if (!ctype_digit($minEdgeWeightRaw) || (int) $minEdgeWeightRaw < 1) {
+    fwrite(STDERR, "--min-edge-weight must be a positive integer." . PHP_EOL);
+    exit(2);
+}
+
+$maxNodes = null;
+if ($maxNodesRaw !== null) {
+    if (!ctype_digit($maxNodesRaw) || (int) $maxNodesRaw < 1) {
+        fwrite(STDERR, "--max-nodes must be a positive integer." . PHP_EOL);
+        exit(2);
+    }
+
+    $maxNodes = (int) $maxNodesRaw;
+}
+
+$namespaceDepth = (int) $namespaceDepthRaw;
+$minEdgeWeight = (int) $minEdgeWeightRaw;
+
+try {
+    $loader = new CallGraphLoader();
+    $edges = $loader->loadFromFile($input);
+
+    $renderer = new HtmlRenderer(
+        $mode,
+        $includeFunctions,
+        $namespaceDepth,
+        $minEdgeWeight,
+        $maxNodes
+    );
+
+    $html = $renderer->render($edges);
+    $result = file_put_contents($htmlPath, $html);
+    if ($result === false) {
+        throw new RuntimeException('Unable to write output file: ' . $htmlPath);
+    }
+
+    $stats = $renderer->getLastStats();
+
+    fwrite(STDOUT, 'Wrote ' . $htmlPath . PHP_EOL);
+    fwrite(
+        STDOUT,
+        'Input edges: ' . $stats['inputEdges']
+        . ', namespace hints: ' . $stats['knownNamespaces']
+        . ', default mode: ' . $mode
+        . PHP_EOL
+    );
+} catch (Throwable $exception) {
+    fwrite(STDERR, 'Error: ' . $exception->getMessage() . PHP_EOL);
+    exit(1);
+}
+
+/**
+ * @param array<string, mixed> $options
+ * @param list<string> $keys
+ */
+function optionValue(array $options, array $keys, ?string $default): ?string
+{
+    foreach ($keys as $key) {
+        if (!array_key_exists($key, $options)) {
+            continue;
+        }
+
+        $value = $options[$key];
+        if ($value === false || $value === null) {
+            return $default;
+        }
+
+        if (is_string($value) && $value !== '') {
+            return $value;
+        }
+    }
+
+    return $default;
+}
+
+function printHelp(): void
+{
+    $help = <<<'TXT'
+Generate an interactive HTML call graph page from callgraph.json.
+
+Usage:
+  callgraph-viz-html [options]
+
+Options:
+  -i, --input <file>            Input JSON file (default: callgraph.json)
+  -o, --html <file>             Output HTML file (default: callgraph.html)
+  -m, --mode <class|method|namespace>
+                                Initial mode value in URL defaults (default: class)
+  -p, --namespace-depth <n>     Initial namespace depth default (default: 2)
+  -w, --min-edge-weight <n>     Initial min edge weight default (default: 1)
+  -n, --max-nodes <count>       Initial max nodes default
+      --include-functions       Initial include-functions default (off by default)
+  -h, --help                    Show this help
+
+The generated page uses URL query filters and reloads on filter changes,
+for example: ?mode=method&ns=App\\Service,App\\Domain&maxNodes=300
+TXT;
+
+    fwrite(STDOUT, $help . PHP_EOL);
+}

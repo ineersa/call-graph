@@ -11,6 +11,7 @@ It generates `callgraph.json` during PHPStan analysis and can render a Graphviz 
 - Emits structured JSON with metadata (`file`, `line`, `callType`, `unresolved`).
 - Includes compatibility output (`data`) for existing callmap-style tooling.
 - Renders DOT/SVG graphs with namespace clustering and regex filtering.
+- Generates interactive HTML graph pages with URL-driven filters.
 - Excludes function-involved edges by default in visualization (use `--include-functions` to opt in).
 - Supports coupling-oriented views with namespace mode and edge-weight filtering.
 
@@ -68,6 +69,12 @@ Generate DOT and SVG (requires Graphviz `dot`):
 ./vendor/bin/callgraph-viz --input callgraph.json --dot callgraph.dot --svg callgraph.svg
 ```
 
+Generate interactive HTML (Cytoscape.js via CDN):
+
+```bash
+./vendor/bin/callgraph-viz-html --input callgraph.json --html callgraph.html
+```
+
 If Graphviz fails with `trouble in init_rank`, use one of these:
 
 ```bash
@@ -101,6 +108,22 @@ Include functions if needed:
 
 ```bash
 ./vendor/bin/callgraph-viz --include-functions --mode method
+```
+
+Interactive HTML supports these URL query filters (page reloads when filters change):
+
+- `mode=class|method|namespace`
+- `namespaceDepth=<n>`
+- `minEdgeWeight=<n>`
+- `maxNodes=<n>`
+- `includeFunctions=1`
+- `strictNamespaces=1` (when `ns` is set, keep only relations where both sides match)
+- `ns=App\\Service,App\\Domain` (comma-separated namespace prefixes)
+
+Example:
+
+```text
+file:///.../callgraph.html?mode=method&ns=App\Service,App\Domain&maxNodes=300
 ```
 
 ## Output format
