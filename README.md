@@ -1,8 +1,8 @@
 # Call Graph
 
-`call-graph` is a PHPStan extension plus a rendering script for extracting and visualizing call graphs.
+`call-graph` is a PHPStan extension plus CLI tools for extracting and visualizing call graphs.
 
-It generates `callgraph.json` during PHPStan analysis and can render a Graphviz DOT (and optionally SVG) call graph.
+It writes `callgraph.json` during PHPStan analysis. You can open that in an **interactive HTML explorer** (no Graphviz required) or render **Graphviz DOT/SVG** for static diagrams and docs.
 
 ![Call Graph Explorer: interactive graph with URL filters and node focus](docs/call-graph-explorer-2026-04-08.png)
 
@@ -12,8 +12,8 @@ It generates `callgraph.json` during PHPStan analysis and can render a Graphviz 
 - Uses PHPStan type/reflection data to resolve declaring classes where possible.
 - Emits structured JSON with metadata (`file`, `line`, `callType`, `unresolved`).
 - Includes compatibility output (`data`) for existing callmap-style tooling.
-- Renders DOT/SVG graphs with namespace clustering and regex filtering.
-- Generates interactive HTML graph pages with URL-driven filters.
+- **Interactive HTML** explorer (Cytoscape.js) with URL-driven filters and node focus—no Graphviz install needed.
+- **Graphviz** DOT/SVG output with namespace clustering and regex filtering.
 - Excludes function-involved edges by default in visualization (use `--include-functions` to opt in).
 - Supports coupling-oriented views with namespace mode and edge-weight filtering.
 
@@ -59,29 +59,39 @@ services:
 
 ## Render visualization
 
-Generate DOT:
+### Interactive HTML (recommended for exploration)
 
-```bash
-./vendor/bin/callgraph-viz --input callgraph.json --dot callgraph.dot
-```
-
-Generate DOT and SVG (requires Graphviz `dot`):
-
-```bash
-./vendor/bin/callgraph-viz --input callgraph.json --dot callgraph.dot --svg callgraph.svg
-```
-
-Generate interactive HTML (Cytoscape.js via CDN):
+Loads the graph in the browser with pan/zoom, node focus, and shareable filter URLs. **Does not require Graphviz.**
 
 ```bash
 ./vendor/bin/callgraph-viz-html --input callgraph.json --html callgraph.html
 ```
 
-If Graphviz fails with `trouble in init_rank`, use one of these:
+Query parameters (changing them reloads the page):
+
+- `mode=class|method|namespace`
+- `namespaceDepth=<n>`
+- `minEdgeWeight=<n>`
+- `maxNodes=<n>`
+- `includeFunctions=1`
+- `strictNamespaces=1` (when `ns` is set, keep only relations where both sides match)
+- `ns=App\\Service,App\\Domain` (comma-separated namespace prefixes)
+
+Example:
+
+```text
+file:///.../callgraph.html?mode=method&ns=App\Service,App\Domain&maxNodes=300
+```
+
+### Graphviz (DOT and SVG)
+
+For static diagrams, documentation, or pipelines that already use `dot`:
 
 ```bash
-./vendor/bin/callgraph-viz --no-cluster --svg callgraph.svg
+./vendor/bin/callgraph-viz --input callgraph.json --dot callgraph.dot
+./vendor/bin/callgraph-viz --input callgraph.json --dot callgraph.dot --svg callgraph.svg
 ```
+
 Useful filters:
 
 ```bash
@@ -92,7 +102,7 @@ Useful filters:
   --max-nodes 250
 ```
 
-Large graph / coupling view (recommended):
+Large graph / coupling-style view:
 
 ```bash
 ./vendor/bin/callgraph-viz \
@@ -108,22 +118,6 @@ Include functions if needed:
 
 ```bash
 ./vendor/bin/callgraph-viz --include-functions --mode method
-```
-
-Interactive HTML supports these URL query filters (page reloads when filters change):
-
-- `mode=class|method|namespace`
-- `namespaceDepth=<n>`
-- `minEdgeWeight=<n>`
-- `maxNodes=<n>`
-- `includeFunctions=1`
-- `strictNamespaces=1` (when `ns` is set, keep only relations where both sides match)
-- `ns=App\\Service,App\\Domain` (comma-separated namespace prefixes)
-
-Example:
-
-```text
-file:///.../callgraph.html?mode=method&ns=App\Service,App\Domain&maxNodes=300
 ```
 
 ## Output format
