@@ -7,7 +7,7 @@ use CallGraph\Viz\DotRenderer;
 require $_composer_autoload_path ?? __DIR__ . '/../vendor/autoload.php';
 
 $options = getopt(
-    'hi:d:s:m:I:E:n:w:p:',
+    'hi:d:s:m:I:E:n:w:p:k:',
     [
         'help',
         'input:',
@@ -19,6 +19,7 @@ $options = getopt(
         'max-nodes:',
         'min-edge-weight:',
         'namespace-depth:',
+        'engine:',
         'no-cluster',
         'include-functions',
     ]
@@ -42,6 +43,7 @@ $includePattern = optionValue($options, ['I', 'include'], null);
 $excludePattern = optionValue($options, ['E', 'exclude'], null);
 $clusterByNamespace = !isset($options['no-cluster']);
 $includeFunctions = isset($options['include-functions']);
+$engine = optionValue($options, ['k', 'engine'], 'dot');
 
 $maxNodesRaw = optionValue($options, ['n', 'max-nodes'], null);
 $minEdgeWeightRaw = optionValue($options, ['w', 'min-edge-weight'], '1');
@@ -62,6 +64,11 @@ if (!ctype_digit($minEdgeWeightRaw) || (int) $minEdgeWeightRaw < 1) {
 
 if (!ctype_digit($namespaceDepthRaw) || (int) $namespaceDepthRaw < 1) {
     fwrite(STDERR, "--namespace-depth must be a positive integer." . PHP_EOL);
+    exit(2);
+}
+
+if ($engine === null || !in_array($engine, ['dot', 'sfdp', 'fdp', 'neato'], true)) {
+    fwrite(STDERR, "--engine must be one of: dot, sfdp, fdp, neato." . PHP_EOL);
     exit(2);
 }
 
@@ -87,7 +94,7 @@ try {
     file_put_contents($dotPath, $dot);
 
     if ($svgPath !== null) {
-        renderSvg($dotPath, $svgPath);
+        renderSvg($dotPath, $svgPath, $engine);
     }
 
     $stats = $renderer->getLastStats();
@@ -135,23 +142,48 @@ function optionValue(array $options, array $keys, ?string $default): ?string
     return $default;
 }
 
-function renderSvg(string $dotPath, string $svgPath): void
+function renderSvg(string $dotPath, string $svgPath, string $engine): void
 {
-    $which = [];
-    $whichExit = 0;
-    exec('command -v dot', $which, $whichExit);
-    if ($whichExit !== 0) {
-        throw new RuntimeException('Graphviz dot executable was not found in PATH.');
+    if (!binaryExists($engine)) {
+        throw new RuntimeException('Graphviz engine was not found in PATH: ' . $engine);
     }
 
+    $flags = $engine === 'dot' ? '-Gnewrank=true ' : '';
     $output = [];
     $exitCode = 0;
-    $command = 'dot -Tsvg ' . escapeshellarg($dotPath) . ' -o ' . escapeshellarg($svgPath);
+    $command = $engine . ' -Tsvg ' . $flags . escapeshellarg($dotPath) . ' -o ' . escapeshellarg($svgPath);
     exec($command . ' 2>&1', $output, $exitCode);
 
-    if ($exitCode !== 0) {
-        throw new RuntimeException('Graphviz failed: ' . implode(PHP_EOL, $output));
+    if ($exitCode === 0) {
+        return;
     }
+
+    $errorText = implode(PHP_EOL, $output);
+    if ($engine === 'dot' && str_contains($errorText, 'trouble in init_rank') && binaryExists('sfdp')) {
+        fwrite(STDERR, "dot failed with init_rank; retrying with sfdp fallback." . PHP_EOL);
+
+        $fallbackOutput = [];
+        $fallbackExitCode = 0;
+        $fallbackCommand = 'sfdp -Tsvg ' . escapeshellarg($dotPath) . ' -o ' . escapeshellarg($svgPath);
+        exec($fallbackCommand . ' 2>&1', $fallbackOutput, $fallbackExitCode);
+
+        if ($fallbackExitCode === 0) {
+            return;
+        }
+
+        $errorText .= PHP_EOL . 'sfdp fallback failed:' . PHP_EOL . implode(PHP_EOL, $fallbackOutput);
+    }
+
+    throw new RuntimeException('Graphviz failed: ' . $errorText);
+}
+
+function binaryExists(string $binary): bool
+{
+    $output = [];
+    $exitCode = 0;
+    exec('command -v ' . escapeshellarg($binary), $output, $exitCode);
+
+    return $exitCode === 0;
 }
 
 function printHelp(): void
@@ -173,6 +205,7 @@ Options:
   -n, --max-nodes <count>   Keep top N nodes by edge frequency
   -w, --min-edge-weight <n> Hide edges with fewer than N calls (default: 1)
   -p, --namespace-depth <n> Namespace segment depth for namespace mode (default: 2)
+  -k, --engine <name>       Graphviz engine: dot, sfdp, fdp, neato (default: dot)
       --no-cluster          Disable namespace cluster boxes
       --include-functions   Include function nodes/edges (excluded by default)
   -h, --help                Show this help
@@ -182,6 +215,7 @@ Examples:
   callgraph-viz --mode method --dot detailed.dot
   callgraph-viz --include-functions --mode method
   callgraph-viz --mode namespace --namespace-depth 3 --min-edge-weight 2 --max-nodes 120
+  callgraph-viz --engine sfdp --svg callgraph.svg
   callgraph-viz -I '/^App\\\\/' -E '/\\\\Tests\\\\/' --svg callgraph.svg
 TXT;
 
