@@ -20,6 +20,15 @@ composer require --dev ineersa/call-graph
 
 Requirements: PHP 8.2+ and PHPStan 2.1+.
 
+If you use `phpstan/extension-installer`, `callgraph.neon` is auto-registered from package metadata.
+
+Without extension-installer, include it manually in your `phpstan.neon`:
+
+```neon
+includes:
+    - vendor/ineersa/call-graph/callgraph.neon
+```
+
 ## Generate call graph JSON
 
 Run PHPStan with the extension config:

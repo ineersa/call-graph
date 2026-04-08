@@ -15,6 +15,9 @@
     "bin": [
         "bin/callgraph-viz"
     ],
+    "suggest": {
+        "phpstan/extension-installer": "Automatically registers callgraph.neon in PHPStan"
+    },
     "extra": {
         "phpstan": {
             "includes": [
