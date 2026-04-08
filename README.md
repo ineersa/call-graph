@@ -91,3 +91,9 @@ Example edge:
   "unresolved": false
 }
 ```
+
+## Acknowledgements
+
+This project follows the PHPStan pattern for extracting structured data from analysis (collectors, a `CollectedDataNode` rule, and a custom error formatter), as described in [Using PHPStan to Extract Data About Your Codebase](https://phpstan.org/blog/using-phpstan-to-extract-data-about-your-codebase).
+
+The callmap-compatible `data` shape and the overall idea of emitting a JSON call map from PHPStan build on prior work in [stella-maris/callmap](https://gitlab.com/stella-maris/callmap).
