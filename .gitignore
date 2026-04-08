@@ -1,0 +1,4 @@
+/vendor/
+/callgraph.json
+/callgraph.dot
+/callgraph.svg

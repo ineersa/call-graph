@@ -1,0 +1,25 @@
+parameters:
+    customRulesetUsed: true
+    errorFormat: callgraph
+    tipsOfTheDay: false
+
+rules:
+    - CallGraph\PHPStan\Rule\CallGraphRule
+
+services:
+    errorFormatter.callgraph:
+        class: CallGraph\PHPStan\Formatter\CallGraphJsonFormatter
+        arguments:
+            outputFile: callgraph.json
+    -
+        class: CallGraph\PHPStan\Collector\MethodCallCollector
+        tags:
+            - phpstan.collector
+    -
+        class: CallGraph\PHPStan\Collector\StaticCallCollector
+        tags:
+            - phpstan.collector
+    -
+        class: CallGraph\PHPStan\Collector\FunctionCallCollector
+        tags:
+            - phpstan.collector

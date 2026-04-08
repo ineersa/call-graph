@@ -1,0 +1,153 @@
+#!/usr/bin/env php
+<?php declare(strict_types=1);
+
+use CallGraph\Viz\CallGraphLoader;
+use CallGraph\Viz\DotRenderer;
+
+require $_composer_autoload_path ?? __DIR__ . '/../vendor/autoload.php';
+
+$options = getopt(
+    'hi:d:s:m:I:E:n:',
+    [
+        'help',
+        'input:',
+        'dot:',
+        'svg:',
+        'mode:',
+        'include:',
+        'exclude:',
+        'max-nodes:',
+        'no-cluster',
+    ]
+);
+
+if (!is_array($options)) {
+    fwrite(STDERR, "Failed to parse CLI options." . PHP_EOL);
+    exit(2);
+}
+
+if (isset($options['h']) || isset($options['help'])) {
+    printHelp();
+    exit(0);
+}
+
+$input = optionValue($options, ['i', 'input'], 'callgraph.json');
+$dotPath = optionValue($options, ['d', 'dot'], 'callgraph.dot');
+$svgPath = optionValue($options, ['s', 'svg'], null);
+$mode = optionValue($options, ['m', 'mode'], 'class');
+$includePattern = optionValue($options, ['I', 'include'], null);
+$excludePattern = optionValue($options, ['E', 'exclude'], null);
+$clusterByNamespace = !isset($options['no-cluster']);
+
+$maxNodesRaw = optionValue($options, ['n', 'max-nodes'], null);
+$maxNodes = null;
+if ($maxNodesRaw !== null) {
+    if (!ctype_digit($maxNodesRaw) || (int) $maxNodesRaw < 1) {
+        fwrite(STDERR, "--max-nodes must be a positive integer." . PHP_EOL);
+        exit(2);
+    }
+    $maxNodes = (int) $maxNodesRaw;
+}
+
+try {
+    $loader = new CallGraphLoader();
+    $edges = $loader->loadFromFile($input);
+
+    $renderer = new DotRenderer($mode, $includePattern, $excludePattern, $maxNodes, $clusterByNamespace);
+    $dot = $renderer->render($edges);
+
+    file_put_contents($dotPath, $dot);
+
+    if ($svgPath !== null) {
+        renderSvg($dotPath, $svgPath);
+    }
+
+    $stats = $renderer->getLastStats();
+    fwrite(STDOUT, 'Wrote ' . $dotPath . PHP_EOL);
+    fwrite(
+        STDOUT,
+        'Nodes: ' . $stats['renderedNodes']
+        . ', edges: ' . $stats['renderedEdges']
+        . ', filtered: ' . $stats['droppedByFilter']
+        . ', trimmed: ' . $stats['droppedByMaxNodes']
+        . PHP_EOL
+    );
+
+    if ($svgPath !== null) {
+        fwrite(STDOUT, 'Wrote ' . $svgPath . PHP_EOL);
+    }
+} catch (Throwable $exception) {
+    fwrite(STDERR, 'Error: ' . $exception->getMessage() . PHP_EOL);
+    exit(1);
+}
+
+/**
+ * @param array<string, mixed> $options
+ * @param list<string> $keys
+ */
+function optionValue(array $options, array $keys, ?string $default): ?string
+{
+    foreach ($keys as $key) {
+        if (!array_key_exists($key, $options)) {
+            continue;
+        }
+
+        $value = $options[$key];
+        if ($value === false || $value === null) {
+            return $default;
+        }
+
+        if (is_string($value) && $value !== '') {
+            return $value;
+        }
+    }
+
+    return $default;
+}
+
+function renderSvg(string $dotPath, string $svgPath): void
+{
+    $which = [];
+    $whichExit = 0;
+    exec('command -v dot', $which, $whichExit);
+    if ($whichExit !== 0) {
+        throw new RuntimeException('Graphviz dot executable was not found in PATH.');
+    }
+
+    $output = [];
+    $exitCode = 0;
+    $command = 'dot -Tsvg ' . escapeshellarg($dotPath) . ' -o ' . escapeshellarg($svgPath);
+    exec($command . ' 2>&1', $output, $exitCode);
+
+    if ($exitCode !== 0) {
+        throw new RuntimeException('Graphviz failed: ' . implode(PHP_EOL, $output));
+    }
+}
+
+function printHelp(): void
+{
+    $help = <<<'TXT'
+Generate a Graphviz DOT call graph from callgraph.json.
+
+Usage:
+  callgraph-viz [options]
+
+Options:
+  -i, --input <file>        Input JSON file (default: callgraph.json)
+  -d, --dot <file>          Output DOT file (default: callgraph.dot)
+  -s, --svg <file>          Also render SVG through Graphviz dot
+  -m, --mode <class|method> Group nodes by class or method (default: class)
+  -I, --include <regex>     Keep edges where either side matches regex
+  -E, --exclude <regex>     Drop edges where either side matches regex
+  -n, --max-nodes <count>   Keep top N nodes by edge frequency
+      --no-cluster          Disable namespace cluster boxes
+  -h, --help                Show this help
+
+Examples:
+  callgraph-viz
+  callgraph-viz --mode method --dot detailed.dot
+  callgraph-viz -I '/^App\\\\/' -E '/\\\\Tests\\\\/' --svg callgraph.svg
+TXT;
+
+    fwrite(STDOUT, $help . PHP_EOL);
+}

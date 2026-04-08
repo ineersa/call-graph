@@ -1,0 +1,25 @@
+{
+    "name": "ineersa/call-graph",
+    "description": "PHPStan extension and DOT visualizer for application call graphs",
+    "type": "phpstan-extension",
+    "license": "MIT",
+    "require": {
+        "php": "^8.2",
+        "phpstan/phpstan": "^2.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "CallGraph\\": "src/"
+        }
+    },
+    "bin": [
+        "bin/callgraph-viz"
+    ],
+    "extra": {
+        "phpstan": {
+            "includes": [
+                "callgraph.neon"
+            ]
+        }
+    }
+}

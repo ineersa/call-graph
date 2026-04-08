@@ -1,0 +1,57 @@
+{
+    "meta": {
+        "formatVersion": 1,
+        "generatedAt": "2026-01-01T00:00:00+00:00",
+        "edgeCount": 4
+    },
+    "edges": [
+        {
+            "callerClass": "App\\Service\\UserService",
+            "callerMember": "getUser",
+            "callerKind": "method",
+            "calleeClass": "App\\Repository\\UserRepository",
+            "calleeMember": "find",
+            "calleeKind": "method",
+            "callType": "method",
+            "file": "src/Service/UserService.php",
+            "line": 41,
+            "unresolved": false
+        },
+        {
+            "callerClass": "App\\Service\\UserService",
+            "callerMember": "getUser",
+            "callerKind": "method",
+            "calleeClass": "App\\Audit\\Logger",
+            "calleeMember": "log",
+            "calleeKind": "method",
+            "callType": "static",
+            "file": "src/Service/UserService.php",
+            "line": 43,
+            "unresolved": false
+        },
+        {
+            "callerClass": "",
+            "callerMember": "bootstrap",
+            "callerKind": "function",
+            "calleeClass": "",
+            "calleeMember": "App\\Support\\config",
+            "calleeKind": "function",
+            "callType": "function",
+            "file": "bin/bootstrap.php",
+            "line": 9,
+            "unresolved": false
+        },
+        {
+            "callerClass": "App\\Service\\UserService",
+            "callerMember": "getUser",
+            "callerKind": "method",
+            "calleeClass": "mixed",
+            "calleeMember": "{dynamic-method}",
+            "calleeKind": "method",
+            "callType": "method",
+            "file": "src/Service/UserService.php",
+            "line": 52,
+            "unresolved": true
+        }
+    ]
+}
