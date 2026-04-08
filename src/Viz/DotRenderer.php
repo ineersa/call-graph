@@ -10,12 +10,14 @@ use function array_keys;
 use function array_slice;
 use function arsort;
 use function count;
+use function explode;
 use function implode;
 use function in_array;
-use function is_array;
+use function max;
 use function ksort;
 use function preg_match;
 use function sprintf;
+use function str_replace;
 use function str_contains;
 use function str_starts_with;
 use function strrpos;
@@ -24,12 +26,14 @@ use function usort;
 
 final class DotRenderer
 {
-    /** @var array{inputEdges: int, renderedEdges: int, renderedNodes: int, droppedByFilter: int, droppedByMaxNodes: int} */
+    /** @var array{inputEdges: int, renderedEdges: int, renderedNodes: int, droppedByFilter: int, droppedByFunction: int, droppedByMinEdgeWeight: int, droppedByMaxNodes: int} */
     private array $lastStats = [
         'inputEdges' => 0,
         'renderedEdges' => 0,
         'renderedNodes' => 0,
         'droppedByFilter' => 0,
+        'droppedByFunction' => 0,
+        'droppedByMinEdgeWeight' => 0,
         'droppedByMaxNodes' => 0,
     ];
 
@@ -38,10 +42,13 @@ final class DotRenderer
         private ?string $includePattern = null,
         private ?string $excludePattern = null,
         private ?int $maxNodes = null,
-        private bool $clusterByNamespace = true
+        private bool $clusterByNamespace = true,
+        private bool $includeFunctions = false,
+        private int $namespaceDepth = 2,
+        private int $minEdgeWeight = 1
     ) {
-        if (!in_array($this->mode, ['class', 'method'], true)) {
-            throw new InvalidArgumentException('Unsupported mode, expected class or method.');
+        if (!in_array($this->mode, ['class', 'method', 'namespace'], true)) {
+            throw new InvalidArgumentException('Unsupported mode, expected class, method, or namespace.');
         }
 
         $this->assertPattern($this->includePattern, 'include');
@@ -49,6 +56,18 @@ final class DotRenderer
 
         if ($this->maxNodes !== null && $this->maxNodes < 1) {
             throw new InvalidArgumentException('maxNodes must be greater than zero.');
+        }
+
+        if ($this->namespaceDepth < 1) {
+            throw new InvalidArgumentException('namespaceDepth must be greater than zero.');
+        }
+
+        if ($this->minEdgeWeight < 1) {
+            throw new InvalidArgumentException('minEdgeWeight must be greater than zero.');
+        }
+
+        if ($this->mode === 'namespace') {
+            $this->clusterByNamespace = false;
         }
     }
 
@@ -60,10 +79,18 @@ final class DotRenderer
         $nodeFrequency = [];
         $graphEdges = [];
         $droppedByFilter = 0;
+        $droppedByFunction = 0;
+        $droppedByMinEdgeWeight = 0;
         $droppedByMaxNodes = 0;
 
         foreach ($edges as $edge) {
             [$fromLabel, $toLabel] = $this->labelsFor($edge);
+
+            if (!$this->includeFunctions && $this->isFunctionLabel($fromLabel, $toLabel)) {
+                $droppedByFunction++;
+                continue;
+            }
+
             if (!$this->passesFilters($fromLabel, $toLabel)) {
                 $droppedByFilter++;
                 continue;
@@ -79,11 +106,30 @@ final class DotRenderer
                     'to' => $toLabel,
                     'types' => [],
                     'unresolved' => false,
+                    'weight' => 0,
                 ];
             }
 
             $graphEdges[$edgeKey]['types'][$edge->callType] = true;
             $graphEdges[$edgeKey]['unresolved'] = $graphEdges[$edgeKey]['unresolved'] || $edge->unresolved;
+            $graphEdges[$edgeKey]['weight']++;
+        }
+
+        if ($this->minEdgeWeight > 1) {
+            foreach ($graphEdges as $edgeKey => $graphEdge) {
+                if ($graphEdge['weight'] >= $this->minEdgeWeight) {
+                    continue;
+                }
+
+                unset($graphEdges[$edgeKey]);
+                $droppedByMinEdgeWeight++;
+            }
+
+            $nodeFrequency = [];
+            foreach ($graphEdges as $graphEdge) {
+                $nodeFrequency[$graphEdge['from']] = ($nodeFrequency[$graphEdge['from']] ?? 0) + $graphEdge['weight'];
+                $nodeFrequency[$graphEdge['to']] = ($nodeFrequency[$graphEdge['to']] ?? 0) + $graphEdge['weight'];
+            }
         }
 
         if ($this->maxNodes !== null && count($nodeFrequency) > $this->maxNodes) {
@@ -100,8 +146,8 @@ final class DotRenderer
 
             $nodeFrequency = [];
             foreach ($graphEdges as $graphEdge) {
-                $nodeFrequency[$graphEdge['from']] = ($nodeFrequency[$graphEdge['from']] ?? 0) + 1;
-                $nodeFrequency[$graphEdge['to']] = ($nodeFrequency[$graphEdge['to']] ?? 0) + 1;
+                $nodeFrequency[$graphEdge['from']] = ($nodeFrequency[$graphEdge['from']] ?? 0) + $graphEdge['weight'];
+                $nodeFrequency[$graphEdge['to']] = ($nodeFrequency[$graphEdge['to']] ?? 0) + $graphEdge['weight'];
             }
         }
 
@@ -114,7 +160,7 @@ final class DotRenderer
 
         $lines = [];
         $lines[] = 'digraph CallGraph {';
-        $lines[] = '  graph [rankdir=LR, bgcolor="#FFFFFF", splines=true, overlap=false, pad="0.25"];';
+        $lines[] = '  graph [rankdir=LR, bgcolor="#FFFFFF", splines=true, overlap=false, pad="0.25", ranksep="1.2", nodesep="0.5", concentrate=true];';
         $lines[] = '  node [shape=box, style="rounded,filled", fillcolor="#EAF2FF", color="#4A6FA5", fontname="Helvetica", fontsize=10, margin="0.10,0.06"];';
         $lines[] = '  edge [color="#5D738A", arrowsize=0.7, penwidth=1.0];';
 
@@ -151,12 +197,28 @@ final class DotRenderer
             usort($types, static fn (string $a, string $b): int => $a <=> $b);
 
             $attributes = [
-                'tooltip' => implode(', ', $types),
+                'tooltip' => implode(', ', $types) . ', weight=' . (string) $graphEdge['weight'],
             ];
 
+            $edgeLabel = '';
             if (count($types) > 1) {
-                $attributes['label'] = implode(', ', $types);
+                $edgeLabel = implode(', ', $types);
+            }
+
+            if ($graphEdge['weight'] > 1) {
+                $weightLabel = 'x' . $graphEdge['weight'];
+                $edgeLabel = $edgeLabel === '' ? $weightLabel : $edgeLabel . ' ' . $weightLabel;
+            }
+
+            if ($edgeLabel !== '') {
+                $attributes['label'] = $edgeLabel;
                 $attributes['fontsize'] = '8';
+            }
+
+            $attributes['penwidth'] = (string) (1.0 + (($graphEdge['weight'] - 1) * 0.35));
+
+            if (count($types) > 1) {
+                $attributes['penwidth'] = (string) max((float) $attributes['penwidth'], 1.4);
             }
 
             if ($graphEdge['unresolved']) {
@@ -179,6 +241,8 @@ final class DotRenderer
             'renderedEdges' => count($graphEdges),
             'renderedNodes' => count($nodeLabels),
             'droppedByFilter' => $droppedByFilter,
+            'droppedByFunction' => $droppedByFunction,
+            'droppedByMinEdgeWeight' => $droppedByMinEdgeWeight,
             'droppedByMaxNodes' => $droppedByMaxNodes,
         ];
 
@@ -186,11 +250,16 @@ final class DotRenderer
     }
 
     /**
-     * @return array{inputEdges: int, renderedEdges: int, renderedNodes: int, droppedByFilter: int, droppedByMaxNodes: int}
+     * @return array{inputEdges: int, renderedEdges: int, renderedNodes: int, droppedByFilter: int, droppedByFunction: int, droppedByMinEdgeWeight: int, droppedByMaxNodes: int}
      */
     public function getLastStats(): array
     {
         return $this->lastStats;
+    }
+
+    private function isFunctionLabel(string $fromLabel, string $toLabel): bool
+    {
+        return str_starts_with($fromLabel, 'function ') || str_starts_with($toLabel, 'function ');
     }
 
     private function assertPattern(?string $pattern, string $name): void
@@ -209,11 +278,63 @@ final class DotRenderer
      */
     private function labelsFor(CallEdge $edge): array
     {
+        if ($this->mode === 'namespace') {
+            return [
+                $this->namespaceCallerLabel($edge),
+                $this->namespaceCalleeLabel($edge),
+            ];
+        }
+
         if ($this->mode === 'method') {
             return [$edge->methodCallerLabel(), $edge->methodCalleeLabel()];
         }
 
         return [$edge->classCallerLabel(), $edge->classCalleeLabel()];
+    }
+
+    private function namespaceCallerLabel(CallEdge $edge): string
+    {
+        if ($edge->callerClass !== '') {
+            return $this->truncateNamespace($edge->callerClass);
+        }
+
+        return $this->functionNamespaceLabel($edge->callerMember);
+    }
+
+    private function namespaceCalleeLabel(CallEdge $edge): string
+    {
+        if ($edge->calleeClass !== '') {
+            return $this->truncateNamespace($edge->calleeClass);
+        }
+
+        return $this->functionNamespaceLabel($edge->calleeMember);
+    }
+
+    private function functionNamespaceLabel(string $functionName): string
+    {
+        if (!str_contains($functionName, '\\')) {
+            return 'function {global}';
+        }
+
+        $normalized = $this->truncateNamespace($functionName);
+        return 'function ' . $normalized;
+    }
+
+    private function truncateNamespace(string $symbol): string
+    {
+        $trimmed = str_replace('/', '\\', $symbol);
+        if (!$this->isClassLike($trimmed)) {
+            return $trimmed;
+        }
+
+        $segments = explode('\\', $trimmed);
+        $segments = array_values(array_filter($segments, static fn (string $segment): bool => $segment !== ''));
+        if ($segments === []) {
+            return $trimmed;
+        }
+
+        $slice = array_slice($segments, 0, $this->namespaceDepth);
+        return implode('\\', $slice);
     }
 
     private function passesFilters(string $fromLabel, string $toLabel): bool

@@ -7,7 +7,7 @@ use CallGraph\Viz\DotRenderer;
 require $_composer_autoload_path ?? __DIR__ . '/../vendor/autoload.php';
 
 $options = getopt(
-    'hi:d:s:m:I:E:n:',
+    'hi:d:s:m:I:E:n:w:p:',
     [
         'help',
         'input:',
@@ -17,7 +17,10 @@ $options = getopt(
         'include:',
         'exclude:',
         'max-nodes:',
+        'min-edge-weight:',
+        'namespace-depth:',
         'no-cluster',
+        'include-functions',
     ]
 );
 
@@ -38,8 +41,11 @@ $mode = optionValue($options, ['m', 'mode'], 'class');
 $includePattern = optionValue($options, ['I', 'include'], null);
 $excludePattern = optionValue($options, ['E', 'exclude'], null);
 $clusterByNamespace = !isset($options['no-cluster']);
+$includeFunctions = isset($options['include-functions']);
 
 $maxNodesRaw = optionValue($options, ['n', 'max-nodes'], null);
+$minEdgeWeightRaw = optionValue($options, ['w', 'min-edge-weight'], '1');
+$namespaceDepthRaw = optionValue($options, ['p', 'namespace-depth'], '2');
 $maxNodes = null;
 if ($maxNodesRaw !== null) {
     if (!ctype_digit($maxNodesRaw) || (int) $maxNodesRaw < 1) {
@@ -49,11 +55,33 @@ if ($maxNodesRaw !== null) {
     $maxNodes = (int) $maxNodesRaw;
 }
 
+if (!ctype_digit($minEdgeWeightRaw) || (int) $minEdgeWeightRaw < 1) {
+    fwrite(STDERR, "--min-edge-weight must be a positive integer." . PHP_EOL);
+    exit(2);
+}
+
+if (!ctype_digit($namespaceDepthRaw) || (int) $namespaceDepthRaw < 1) {
+    fwrite(STDERR, "--namespace-depth must be a positive integer." . PHP_EOL);
+    exit(2);
+}
+
+$minEdgeWeight = (int) $minEdgeWeightRaw;
+$namespaceDepth = (int) $namespaceDepthRaw;
+
 try {
     $loader = new CallGraphLoader();
     $edges = $loader->loadFromFile($input);
 
-    $renderer = new DotRenderer($mode, $includePattern, $excludePattern, $maxNodes, $clusterByNamespace);
+    $renderer = new DotRenderer(
+        $mode,
+        $includePattern,
+        $excludePattern,
+        $maxNodes,
+        $clusterByNamespace,
+        $includeFunctions,
+        $namespaceDepth,
+        $minEdgeWeight
+    );
     $dot = $renderer->render($edges);
 
     file_put_contents($dotPath, $dot);
@@ -69,6 +97,8 @@ try {
         'Nodes: ' . $stats['renderedNodes']
         . ', edges: ' . $stats['renderedEdges']
         . ', filtered: ' . $stats['droppedByFilter']
+        . ', functions: ' . $stats['droppedByFunction']
+        . ', low-weight: ' . $stats['droppedByMinEdgeWeight']
         . ', trimmed: ' . $stats['droppedByMaxNodes']
         . PHP_EOL
     );
@@ -136,16 +166,22 @@ Options:
   -i, --input <file>        Input JSON file (default: callgraph.json)
   -d, --dot <file>          Output DOT file (default: callgraph.dot)
   -s, --svg <file>          Also render SVG through Graphviz dot
-  -m, --mode <class|method> Group nodes by class or method (default: class)
+  -m, --mode <class|method|namespace>
+                             Group nodes by class, method, or namespace (default: class)
   -I, --include <regex>     Keep edges where either side matches regex
   -E, --exclude <regex>     Drop edges where either side matches regex
   -n, --max-nodes <count>   Keep top N nodes by edge frequency
+  -w, --min-edge-weight <n> Hide edges with fewer than N calls (default: 1)
+  -p, --namespace-depth <n> Namespace segment depth for namespace mode (default: 2)
       --no-cluster          Disable namespace cluster boxes
+      --include-functions   Include function nodes/edges (excluded by default)
   -h, --help                Show this help
 
 Examples:
   callgraph-viz
   callgraph-viz --mode method --dot detailed.dot
+  callgraph-viz --include-functions --mode method
+  callgraph-viz --mode namespace --namespace-depth 3 --min-edge-weight 2 --max-nodes 120
   callgraph-viz -I '/^App\\\\/' -E '/\\\\Tests\\\\/' --svg callgraph.svg
 TXT;
 

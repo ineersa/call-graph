@@ -11,6 +11,8 @@ It generates `callgraph.json` during PHPStan analysis and can render a Graphviz 
 - Emits structured JSON with metadata (`file`, `line`, `callType`, `unresolved`).
 - Includes compatibility output (`data`) for existing callmap-style tooling.
 - Renders DOT/SVG graphs with namespace clustering and regex filtering.
+- Excludes function-involved edges by default in visualization (use `--include-functions` to opt in).
+- Supports coupling-oriented views with namespace mode and edge-weight filtering.
 
 ## Install
 
@@ -74,6 +76,24 @@ Useful filters:
   --include '/^App\\/' \
   --exclude '/\\Tests\\/' \
   --max-nodes 250
+```
+
+Large graph / coupling view (recommended):
+
+```bash
+./vendor/bin/callgraph-viz \
+  --mode namespace \
+  --namespace-depth 3 \
+  --min-edge-weight 2 \
+  --max-nodes 120 \
+  --include '/^App\\/' \
+  --dot coupling.dot
+```
+
+Include functions if needed:
+
+```bash
+./vendor/bin/callgraph-viz --include-functions --mode method
 ```
 
 ## Output format
