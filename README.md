@@ -81,7 +81,6 @@ If Graphviz fails with `trouble in init_rank`, use one of these:
 ./vendor/bin/callgraph-viz --no-cluster --svg callgraph.svg
 ./vendor/bin/callgraph-viz --engine sfdp --svg callgraph.svg
 ```
-
 Useful filters:
 
 ```bash
