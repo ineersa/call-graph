@@ -4,7 +4,7 @@
 
 It generates `callgraph.json` during PHPStan analysis and can render a Graphviz DOT (and optionally SVG) call graph.
 
-![Call Graph Explorer: interactive graph with URL filters and node focus](docs/call-graph-explorer.png)
+![Call Graph Explorer: interactive graph with URL filters and node focus](docs/call-graph-explorer-2026-04-08.png)
 
 ## Features
 
