@@ -4,6 +4,8 @@
 
 It generates `callgraph.json` during PHPStan analysis and can render a Graphviz DOT (and optionally SVG) call graph.
 
+![Call Graph Explorer: interactive graph with URL filters and node focus](docs/call-graph-explorer.png)
+
 ## Features
 
 - Extracts method calls (`$obj->method()`), static calls (`Class::method()`), and function calls (`foo()`).
