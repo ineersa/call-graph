@@ -160,7 +160,7 @@ final class DotRenderer
 
         $lines = [];
         $lines[] = 'digraph CallGraph {';
-        $lines[] = '  graph [rankdir=LR, bgcolor="#FFFFFF", splines=true, overlap=false, pad="0.25"];';
+        $lines[] = '  graph [rankdir=LR, bgcolor="#FFFFFF", splines=true, overlap=false, pad="0.25", newrank=true];';
         $lines[] = '  node [shape=box, style="rounded,filled", fillcolor="#EAF2FF", color="#4A6FA5", fontname="Helvetica", fontsize=10, margin="0.10,0.06"];';
         $lines[] = '  edge [color="#5D738A", arrowsize=0.7, penwidth=1.0];';
 
